@@ -6,7 +6,9 @@ import re
 
 # Pegando a chave secreta
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-modelo = genai.GenerativeModel('gemini-1.5-flash')
+
+# NOVO: Usando o nome completo da versão mais atualizada do modelo
+modelo = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 st.set_page_config(page_title="Meu Diário Alimentar", page_icon="🥗")
 st.title("🥗 Controle com Inteligência Artificial")
@@ -47,7 +49,6 @@ if foto is not None:
                     st.session_state.erro_tecnico = f"A IA não mandou números: {resposta.text}"
                     
             except Exception as e:
-                # Aqui nós capturamos o erro real!
                 st.session_state.falha_ia = True
                 st.session_state.erro_tecnico = str(e)
                 st.session_state.calorias_ia = 0.0
@@ -57,9 +58,8 @@ if foto is not None:
         st.rerun()
 
     if st.session_state.falha_ia:
-        st.warning("Ops, não consegui calcular.")
+        st.warning("Ops, não consegui calcular pela foto.")
         
-        # NOVO: Mostrando o erro técnico na tela para você investigar
         if st.session_state.erro_tecnico:
             st.error(f"🔍 Detalhe técnico do erro: {st.session_state.erro_tecnico}")
             
