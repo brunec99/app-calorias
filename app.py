@@ -36,19 +36,21 @@ def extrair_numeros(texto):
 # --- FUNÇÃO DO ROBÔ DA PLANILHA ---
 def conectar_planilha():
     try:
-        # Pegamos o texto bruto do cofre
         cred_text = st.secrets["GOOGLE_CREDENTIALS"]
-        
-        # MÁGICA AQUI: O 'strict=False' manda o Python ignorar caracteres invisíveis/quebras de linha ruins!
         dict_credenciais = json.loads(cred_text, strict=False)
         
+        # O TRUQUE DE OURO: Consertar a chave privada que o Streamlit bagunça!
+        if "private_key" in dict_credenciais:
+            dict_credenciais["private_key"] = dict_credenciais["private_key"].replace('\\n', '\n')
+            
         escopos = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         credenciais = Credentials.from_service_account_info(dict_credenciais, scopes=escopos)
         cliente = gspread.authorize(credenciais)
         
         return cliente.open_by_url(URL_PLANILHA).worksheet("APP_Calorias")
     except Exception as e:
-        st.error(f"Erro ao conectar com a Planilha: {e}")
+        # Agora o erro nunca mais será invisível!
+        st.error(f"Erro na conexão técnica: {type(e).__name__} - {str(e)}")
         return None
 
 foto = st.camera_input("Tirar foto do prato")
@@ -115,34 +117,29 @@ if foto is not None:
                     try:
                         data_formatada = data.strftime("%d/%m/%Y")
                         
-                        # Mapeando em qual coluna cada refeição deve entrar
                         mapa_colunas = {
                             "Café da manhã": (2, 3), "Lanche da manhã": (4, 5),
                             "Almoço": (6, 7), "Lanche da tarde": (8, 9), "Jantar": (10, 11)
                         }
                         col_kcal, col_prot = mapa_colunas[refeicao]
 
-                        # Buscando a linha da data correta
                         datas_na_planilha = planilha.col_values(1)
                         linha_alvo = None
                         
-                        # Pula o cabeçalho (linhas 1 e 2) na busca
                         for i, valor_data in enumerate(datas_na_planilha):
                             if data_formatada in str(valor_data): 
                                 linha_alvo = i + 1 
                                 break
                         
                         if linha_alvo is None:
-                            # Se não achar a data, cria uma linha nova no final
                             nova_linha = [data_formatada] + [""] * 13 
                             planilha.append_row(nova_linha)
                             linha_alvo = len(planilha.col_values(1))
 
-                        # Escrevendo os dados formatados com vírgula para o Sheets entender como número no BR
                         planilha.update_cell(linha_alvo, col_kcal, f"{calorias}".replace(".", ","))
                         planilha.update_cell(linha_alvo, col_prot, f"{proteinas}".replace(".", ","))
 
                         st.success(f"🎉 SUCESSO! Valores salvos no {refeicao} do dia {data_formatada}!")
                         st.balloons() 
                     except Exception as e:
-                        st.error(f"Erro ao escrever na planilha: {e}")
+                        st.error(f"Erro ao salvar na planilha: {type(e).__name__} - {str(e)}")
