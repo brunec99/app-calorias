@@ -11,8 +11,8 @@ from google.oauth2.service_account import Credentials
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 modelo = genai.GenerativeModel('gemini-2.5-flash')
 
-# 🚨🚨 COLE O LINK DA SUA PLANILHA AQUI EMBAIXO 🚨🚨
-URL_PLANILHA = "COLE_O_LINK_COMPLETO_DA_SUA_PLANILHA_AQUI"
+# Aqui está o link real da sua planilha!
+URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1AHYq5qolaKtb1WfHiojwELrdp_u9kLEdFzrCB-aj2g8/edit?gid=1351016745#gid=1351016745"
 
 st.set_page_config(page_title="Meu Diário Alimentar", page_icon="🥗")
 st.title("🥗 Controle com Inteligência Artificial")
@@ -40,7 +40,9 @@ def conectar_planilha():
         escopos = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         credenciais = Credentials.from_service_account_info(dict_credenciais, scopes=escopos)
         cliente = gspread.authorize(credenciais)
-        return cliente.open_by_url(URL_PLANILHA).sheet1
+        
+        # MUDANÇA AQUI: Apontando exatamente para a aba "APP_Calorias"
+        return cliente.open_by_url(URL_PLANILHA).worksheet("APP_Calorias")
     except Exception as e:
         st.error(f"Erro ao conectar com a Planilha: {e}")
         return None
@@ -120,22 +122,23 @@ if foto is not None:
                         datas_na_planilha = planilha.col_values(1)
                         linha_alvo = None
                         
+                        # Pula o cabeçalho (linhas 1 e 2) na busca
                         for i, valor_data in enumerate(datas_na_planilha):
-                            if data_formatada in valor_data: # Procura a data na coluna A
+                            if data_formatada in str(valor_data): 
                                 linha_alvo = i + 1 
                                 break
                         
                         if linha_alvo is None:
                             # Se não achar a data, cria uma linha nova no final
-                            nova_linha = [data_formatada] + [""] * 12 
+                            nova_linha = [data_formatada] + [""] * 13 
                             planilha.append_row(nova_linha)
                             linha_alvo = len(planilha.col_values(1))
 
-                        # Escrevendo os dados!
+                        # Escrevendo os dados formatados com vírgula para o Sheets entender como número no BR
                         planilha.update_cell(linha_alvo, col_kcal, f"{calorias}".replace(".", ","))
                         planilha.update_cell(linha_alvo, col_prot, f"{proteinas}".replace(".", ","))
 
                         st.success(f"🎉 SUCESSO! Valores salvos no {refeicao} do dia {data_formatada}!")
-                        st.balloons() # Solta balões na tela para comemorar!
+                        st.balloons() 
                     except Exception as e:
-                        st.error(f"Erro ao salvar: {e}")
+                        st.error(f"Erro ao salvar na planilha: {e}")
