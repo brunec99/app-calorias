@@ -11,7 +11,7 @@ from google.oauth2.service_account import Credentials
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 modelo = genai.GenerativeModel('gemini-2.5-flash')
 
-# Aqui está o link real da sua planilha!
+# Seu link real!
 URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1AHYq5qolaKtb1WfHiojwELrdp_u9kLEdFzrCB-aj2g8/edit?gid=1351016745#gid=1351016745"
 
 st.set_page_config(page_title="Meu Diário Alimentar", page_icon="🥗")
@@ -36,12 +36,16 @@ def extrair_numeros(texto):
 # --- FUNÇÃO DO ROBÔ DA PLANILHA ---
 def conectar_planilha():
     try:
-        dict_credenciais = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
+        # Pegamos o texto bruto do cofre
+        cred_text = st.secrets["GOOGLE_CREDENTIALS"]
+        
+        # MÁGICA AQUI: O 'strict=False' manda o Python ignorar caracteres invisíveis/quebras de linha ruins!
+        dict_credenciais = json.loads(cred_text, strict=False)
+        
         escopos = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         credenciais = Credentials.from_service_account_info(dict_credenciais, scopes=escopos)
         cliente = gspread.authorize(credenciais)
         
-        # MUDANÇA AQUI: Apontando exatamente para a aba "APP_Calorias"
         return cliente.open_by_url(URL_PLANILHA).worksheet("APP_Calorias")
     except Exception as e:
         st.error(f"Erro ao conectar com a Planilha: {e}")
@@ -141,4 +145,4 @@ if foto is not None:
                         st.success(f"🎉 SUCESSO! Valores salvos no {refeicao} do dia {data_formatada}!")
                         st.balloons() 
                     except Exception as e:
-                        st.error(f"Erro ao salvar na planilha: {e}")
+                        st.error(f"Erro ao escrever na planilha: {e}")
