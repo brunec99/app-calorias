@@ -8,7 +8,8 @@ import re
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # TENTATIVA 3: Usando o modelo Pro (mais amplo)
-modelo = genai.GenerativeModel('gemini-1.5-pro')
+# TENTATIVA FINAL: Usando o modelo moderno que a sua chave tem!
+modelo = genai.GenerativeModel('gemini-2.5-flash')
 
 st.set_page_config(page_title="Meu Diário Alimentar", page_icon="🥗")
 st.title("🥗 Controle com Inteligência Artificial")
