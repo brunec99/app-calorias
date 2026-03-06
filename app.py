@@ -2,6 +2,7 @@ import streamlit as st
 import datetime
 import google.generativeai as genai
 from PIL import Image
+import re # NOVO: O nosso "caçador de números"
 
 # 1. Pegando a chave secreta
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -23,30 +24,38 @@ if "falha_ia" not in st.session_state:
 
 foto = st.camera_input("Tirar foto do prato")
 
+# Função que varre a resposta da IA e extrai apenas os números
+def extrair_numeros(texto):
+    numeros = re.findall(r'\d+\.?\d*', texto.replace(',', '.'))
+    return numeros
+
 if foto is not None:
     # Se for uma foto nova, a IA analisa
     if "ultima_foto" not in st.session_state or st.session_state.ultima_foto != foto:
         with st.spinner("A IA está analisando sua foto... ⏳"):
             try:
                 imagem = Image.open(foto)
-                comando = "Analise este prato de comida. Estime as calorias e proteínas. Responda EXATAMENTE neste formato, apenas com números: Calorias, Proteínas. Exemplo: 350, 25"
+                comando = "Estime as calorias e proteínas deste prato. Responda APENAS com os dois números separados por vírgula, sem NENHUMA outra palavra. Exemplo: 350, 25"
                 resposta = modelo.generate_content([comando, imagem])
                 
-                valores = resposta.text.split(",")
-                st.session_state.calorias_ia = float(valores[0].strip())
-                st.session_state.proteinas_ia = float(valores[1].strip())
-                st.session_state.falha_ia = False # Deu certo!
+                numeros = extrair_numeros(resposta.text)
                 
+                if len(numeros) >= 2:
+                    st.session_state.calorias_ia = float(numeros[0])
+                    st.session_state.proteinas_ia = float(numeros[1])
+                    st.session_state.falha_ia = False # Deu certo!
+                else:
+                    st.session_state.falha_ia = True
+                    
             except Exception as e:
-                # Deu erro (ex: não viu comida na foto, só o copo)
                 st.session_state.falha_ia = True
                 st.session_state.calorias_ia = 0.0
                 st.session_state.proteinas_ia = 0.0
 
         st.session_state.ultima_foto = foto
-        st.rerun() # Atualiza a tela rápido para mostrar os resultados
+        st.rerun() # Atualiza a tela
 
-    # SE A FOTO FALHAR: Abre o campo de texto pedindo descrição
+    # SE A FOTO FALHAR: Abre o campo de texto
     if st.session_state.falha_ia:
         st.warning("Ops, não consegui identificar a comida pela foto (pode estar muito perto ou escondida).")
         descricao = st.text_input("Descreva o que você está consumindo (Ex: 1 copo grande de café com leite integral)")
@@ -54,19 +63,24 @@ if foto is not None:
         if st.button("Calcular pela descrição"):
             with st.spinner("Calculando pela sua descrição... ⏳"):
                 try:
-                    comando_texto = f"Estime as calorias e proteínas para esta refeição: {descricao}. Responda EXATAMENTE neste formato, apenas com números: Calorias, Proteínas. Exemplo: 350, 25"
+                    comando_texto = f"Estime as calorias e proteínas para esta refeição: '{descricao}'. Responda APENAS com dois números separados por vírgula. Exemplo: 150, 8"
                     resposta_texto = modelo.generate_content(comando_texto)
-                    valores = resposta_texto.text.split(",")
                     
-                    st.session_state.calorias_ia = float(valores[0].strip())
-                    st.session_state.proteinas_ia = float(valores[1].strip())
-                    st.session_state.falha_ia = False # Tiramos o aviso de erro
-                    st.rerun()
+                    numeros = extrair_numeros(resposta_texto.text)
+                    
+                    if len(numeros) >= 2:
+                        st.session_state.calorias_ia = float(numeros[0])
+                        st.session_state.proteinas_ia = float(numeros[1])
+                        st.session_state.falha_ia = False 
+                        st.rerun()
+                    else:
+                        # Agora, se der erro, ele vai te mostrar exatamente o que a IA falou para entendermos
+                        st.error(f"Erro na leitura. A IA respondeu assim: {resposta_texto.text}")
                 except Exception as e:
-                    st.error("Ainda não entendi. Por favor, preencha manualmente abaixo.")
+                    st.error("Erro ao conectar com a IA. Tente novamente.")
 
     # --- Mostrando os campos da planilha ---
-    st.divider() # Linha para separar visualmente
+    st.divider() 
     data = st.date_input("Data da refeição", datetime.date.today())
     refeicao = st.selectbox("Refeição", ["Café da manhã", "Lanche da manhã", "Almoço", "Lanche da tarde", "Jantar"])
     
