@@ -7,8 +7,8 @@ import re
 # Pegando a chave secreta
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# NOVO: Usando o nome completo da versão mais atualizada do modelo
-modelo = genai.GenerativeModel('gemini-1.5-flash')
+# TENTATIVA 3: Usando o modelo Pro (mais amplo)
+modelo = genai.GenerativeModel('gemini-1.5-pro')
 
 st.set_page_config(page_title="Meu Diário Alimentar", page_icon="🥗")
 st.title("🥗 Controle com Inteligência Artificial")
@@ -93,3 +93,14 @@ if foto is not None:
     
     if st.button("Salvar na Planilha"):
         st.success("Dados prontos para salvar!")
+
+# --- FERRAMENTA SECRETA DE DEBUG ---
+st.divider()
+with st.expander("🛠️ Ferramenta do Desenvolvedor: Descobrir Modelos"):
+    st.write("Clique abaixo para ver quais modelos a sua Chave de API tem permissão para usar.")
+    if st.button("Listar meus modelos liberados"):
+        try:
+            modelos = [m.name for m in genai.list_models()]
+            st.write(modelos)
+        except Exception as e:
+            st.error(f"Erro ao listar modelos: {e}")
