@@ -5,7 +5,7 @@ from PIL import Image
 import re # NOVO: O nosso "caçador de números"
 
 # 1. Pegando a chave secreta
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+genai.configure(api_key=st.secrets["AIzaSyDsqUp1_LXxR1CJM3HKdqmuPirnDlLqSHA"])
 
 # 2. Escolhendo o modelo de IA
 modelo = genai.GenerativeModel('gemini-1.5-flash')
