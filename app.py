@@ -32,6 +32,8 @@ if "etapa" not in st.session_state:
     st.session_state.etapa = 1 
 if "ultima_foto" not in st.session_state:
     st.session_state.ultima_foto = None
+if "erro_ia" not in st.session_state:
+    st.session_state.erro_ia = ""
 
 # Variáveis dos gráficos de resumo
 if "resumo_atualizado" not in st.session_state:
@@ -42,7 +44,6 @@ if "resumo_atualizado" not in st.session_state:
 def extrair_numeros(texto):
     return re.findall(r'\d+\.?\d*', texto.replace(',', '.'))
 
-# Transforma textos da planilha como "1.500,50" em números matemáticos
 def extrair_numero_planilha(texto):
     texto = str(texto).strip()
     if not texto: return 0.0
@@ -72,7 +73,6 @@ def conectar_planilha():
     except Exception as e:
         return None
 
-# Função que varre a planilha somando o dia de hoje
 def buscar_resumo_hoje():
     planilha = conectar_planilha()
     if not planilha: return 0.0, 0.0
@@ -81,16 +81,14 @@ def buscar_resumo_hoje():
         data_hoje = datetime.date.today().strftime("%d/%m/%Y")
         registros = planilha.get_all_values()
         
-        for linha in registros[2:]: # Pula cabeçalho de 2 linhas
+        for linha in registros[2:]: 
             if len(linha) > 0 and data_hoje in str(linha[0]):
                 total_kcal = 0.0
                 total_prot = 0.0
                 
-                # Colunas de Kcal: B, D, F, H, J (Índices 1, 3, 5, 7, 9)
                 for i in [1, 3, 5, 7, 9]:
                     if len(linha) > i: total_kcal += extrair_numero_planilha(linha[i])
                         
-                # Colunas de Prot: C, E, G, I, K (Índices 2, 4, 6, 8, 10)
                 for i in [2, 4, 6, 8, 10]:
                     if len(linha) > i: total_prot += extrair_numero_planilha(linha[i])
                         
@@ -100,9 +98,6 @@ def buscar_resumo_hoje():
     except Exception as e:
         return 0.0, 0.0
 
-# ==========================================
-# --- SEÇÃO 1: GRÁFICOS DE RESUMO ---
-# ==========================================
 if not st.session_state.resumo_atualizado:
     with st.spinner("Buscando o quanto você já comeu hoje... 🔄"):
         st.session_state.total_kcal, st.session_state.total_prot = buscar_resumo_hoje()
@@ -122,12 +117,9 @@ with col2:
 
 st.divider()
 
-# ==========================================
-# --- SEÇÃO 2: CÂMERA / GALERIA E IA ---
-# ==========================================
 st.write("Envie uma foto do seu prato. Eu vou analisar e salvar direto na sua planilha!")
 
-# NOVA INTERFACE: Abas para escolher entre Câmera ou Galeria
+# AS NOVAS ABAS ESTÃO AQUI
 aba_camera, aba_galeria = st.tabs(["📸 Tirar Foto", "📁 Enviar da Galeria"])
 
 with aba_camera:
@@ -136,7 +128,6 @@ with aba_camera:
 with aba_galeria:
     foto_galeria = st.file_uploader("Escolha uma foto da sua galeria", type=["png", "jpg", "jpeg"])
 
-# A variável "foto" vai pegar a imagem independente de qual aba o usuário usou!
 foto = foto_camera or foto_galeria
 
 if foto is not None and foto != st.session_state.ultima_foto:
@@ -145,6 +136,7 @@ if foto is not None and foto != st.session_state.ultima_foto:
     st.session_state.descricao_alimento = ""
     st.session_state.calorias_ia = 0.0
     st.session_state.proteinas_ia = 0.0
+    st.session_state.erro_ia = ""
 
 if foto is not None:
     # ETAPA 1: Visão
@@ -154,15 +146,21 @@ if foto is not None:
                 imagem = Image.open(foto)
                 resposta_visao = modelo.generate_content(["Descreva de forma curta e direta quais alimentos e bebidas você vê nesta imagem.", imagem])
                 st.session_state.descricao_alimento = resposta_visao.text.strip()
+                st.session_state.erro_ia = ""
                 st.session_state.etapa = 2 
                 st.rerun()
             except Exception as e:
+                # MÁGICA FOFOQUEIRA AQUI
+                st.session_state.erro_ia = str(e)
                 st.session_state.descricao_alimento = "Não consegui enxergar bem. Digite o que é:"
                 st.session_state.etapa = 2
                 st.rerun()
 
     # ETAPA 2: Revisão
     if st.session_state.etapa >= 2:
+        if st.session_state.erro_ia:
+            st.warning(f"🔍 Aviso técnico da Visão: {st.session_state.erro_ia}")
+
         st.info("💡 Revise os alimentos abaixo e adicione detalhes se quiser!")
         descricao_editada = st.text_area("O que tem na sua refeição?", value=st.session_state.descricao_alimento)
         
@@ -177,12 +175,14 @@ if foto is not None:
                         st.session_state.calorias_ia = float(numeros[0])
                         st.session_state.proteinas_ia = float(numeros[1])
                         st.session_state.descricao_alimento = descricao_editada
+                        st.session_state.erro_ia = ""
                         st.session_state.etapa = 3 
                         st.rerun()
                     else:
-                        st.error("Erro na leitura da IA.")
+                        st.error(f"Erro na leitura da IA: {resposta_calculo.text}")
                 except Exception as e:
-                    st.error("Erro ao calcular.")
+                    # MÁGICA FOFOQUEIRA 2
+                    st.error(f"🚨 Erro técnico ao calcular: {e}")
 
     # ETAPA 3: Salvar no Google Sheets
     if st.session_state.etapa == 3:
