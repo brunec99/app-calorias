@@ -123,10 +123,21 @@ with col2:
 st.divider()
 
 # ==========================================
-# --- SEÇÃO 2: CÂMERA E IA ---
+# --- SEÇÃO 2: CÂMERA / GALERIA E IA ---
 # ==========================================
-st.write("Tire uma foto do seu prato. Eu vou analisar e salvar direto na sua planilha!")
-foto = st.camera_input("Tirar foto do prato")
+st.write("Envie uma foto do seu prato. Eu vou analisar e salvar direto na sua planilha!")
+
+# NOVA INTERFACE: Abas para escolher entre Câmera ou Galeria
+aba_camera, aba_galeria = st.tabs(["📸 Tirar Foto", "📁 Enviar da Galeria"])
+
+with aba_camera:
+    foto_camera = st.camera_input("Tirar foto na hora")
+    
+with aba_galeria:
+    foto_galeria = st.file_uploader("Escolha uma foto da sua galeria", type=["png", "jpg", "jpeg"])
+
+# A variável "foto" vai pegar a imagem independente de qual aba o usuário usou!
+foto = foto_camera or foto_galeria
 
 if foto is not None and foto != st.session_state.ultima_foto:
     st.session_state.ultima_foto = foto
@@ -212,7 +223,6 @@ if foto is not None:
                         planilha.update_cell(linha_alvo, col_kcal, f"{calorias}".replace(".", ","))
                         planilha.update_cell(linha_alvo, col_prot, f"{proteinas}".replace(".", ","))
 
-                        # MÁGICA: Atualiza as barras de progresso na hora, sem precisar recarregar a página!
                         st.session_state.total_kcal += calorias
                         st.session_state.total_prot += proteinas
                         st.session_state.resumo_atualizado = False 
