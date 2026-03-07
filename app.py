@@ -14,9 +14,12 @@ modelo = genai.GenerativeModel('gemini-2.5-flash')
 # Seu link real!
 URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1AHYq5qolaKtb1WfHiojwELrdp_u9kLEdFzrCB-aj2g8/edit?gid=1351016745#gid=1351016745"
 
-# 🎯 SUAS METAS DIÁRIAS (Altere os números aqui se precisar!)
+# 🎯 SUAS METAS DIÁRIAS
 META_KCAL = 1800.0
 META_PROT = 180.0
+
+# 🕒 FUSO HORÁRIO DO BRASIL (UTC-3)
+FUSO_BR = datetime.timezone(datetime.timedelta(hours=-3))
 
 st.set_page_config(page_title="Meu Diário Alimentar", page_icon="🥗")
 st.title("🥗 Controle com Inteligência Artificial")
@@ -78,7 +81,8 @@ def buscar_resumo_hoje():
     if not planilha: return 0.0, 0.0
     
     try:
-        data_hoje = datetime.date.today().strftime("%d/%m/%Y")
+        # AGORA USANDO O HORÁRIO DO BRASIL
+        data_hoje = datetime.datetime.now(FUSO_BR).strftime("%d/%m/%Y")
         registros = planilha.get_all_values()
         
         for linha in registros[2:]: 
@@ -119,7 +123,6 @@ st.divider()
 
 st.write("Envie uma foto do seu prato. Eu vou analisar e salvar direto na sua planilha!")
 
-# AS NOVAS ABAS ESTÃO AQUI
 aba_camera, aba_galeria = st.tabs(["📸 Tirar Foto", "📁 Enviar da Galeria"])
 
 with aba_camera:
@@ -150,7 +153,6 @@ if foto is not None:
                 st.session_state.etapa = 2 
                 st.rerun()
             except Exception as e:
-                # MÁGICA FOFOQUEIRA AQUI
                 st.session_state.erro_ia = str(e)
                 st.session_state.descricao_alimento = "Não consegui enxergar bem. Digite o que é:"
                 st.session_state.etapa = 2
@@ -181,14 +183,16 @@ if foto is not None:
                     else:
                         st.error(f"Erro na leitura da IA: {resposta_calculo.text}")
                 except Exception as e:
-                    # MÁGICA FOFOQUEIRA 2
                     st.error(f"🚨 Erro técnico ao calcular: {e}")
 
     # ETAPA 3: Salvar no Google Sheets
     if st.session_state.etapa == 3:
         st.divider() 
         st.success("Cálculo concluído!")
-        data = st.date_input("Data da refeição", datetime.date.today())
+        
+        # AGORA USANDO O HORÁRIO DO BRASIL NA CAIXINHA TAMBÉM
+        data = st.date_input("Data da refeição", datetime.datetime.now(FUSO_BR).date())
+        
         refeicao = st.selectbox("Refeição", ["Café da manhã", "Lanche da manhã", "Almoço", "Lanche da tarde", "Jantar"])
         
         calorias = st.number_input("Calorias (kcal)", min_value=0.0, format="%.2f", value=st.session_state.calorias_ia)
