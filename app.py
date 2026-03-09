@@ -39,7 +39,6 @@ if "ultima_foto" not in st.session_state:
 if "erro_ia" not in st.session_state:
     st.session_state.erro_ia = ""
 
-# Variáveis dos gráficos de resumo
 if "resumo_atualizado" not in st.session_state:
     st.session_state.resumo_atualizado = False
     st.session_state.total_kcal = 0.0
@@ -86,24 +85,21 @@ def buscar_resumo_hoje():
         data_hoje = datetime.datetime.now(FUSO_BR).strftime("%d/%m/%Y")
         registros = planilha.get_all_values()
         
+        soma_kcal = 0.0
+        soma_prot = 0.0
+        
         for linha in registros[2:]: 
             if len(linha) > 0 and data_hoje in str(linha[0]):
-                total_kcal = 0.0
-                total_prot = 0.0
-                
                 for i in [1, 3, 5, 7, 9]:
-                    if len(linha) > i: total_kcal += extrair_numero_planilha(linha[i])
-                        
+                    if len(linha) > i: soma_kcal += extrair_numero_planilha(linha[i])
                 for i in [2, 4, 6, 8, 10]:
-                    if len(linha) > i: total_prot += extrair_numero_planilha(linha[i])
-                        
-                return total_kcal, total_prot
+                    if len(linha) > i: soma_prot += extrair_numero_planilha(linha[i])
+                return soma_kcal, soma_prot
                 
         return 0.0, 0.0
     except Exception as e:
         return 0.0, 0.0
 
-# --- FUNÇÃO PARA PEGAR O HISTÓRICO (ÚLTIMOS 7 DIAS) ---
 def buscar_historico(dias=7):
     planilha = conectar_planilha()
     if not planilha: return []
@@ -112,7 +108,6 @@ def buscar_historico(dias=7):
         registros = planilha.get_all_values()[2:] 
         historico = []
         
-        # Pega as linhas de baixo para cima (mais recentes primeiro)
         for linha in reversed(registros):
             if not linha or not str(linha[0]).strip(): continue
             data_str = str(linha[0]).strip()
@@ -124,7 +119,10 @@ def buscar_historico(dias=7):
             for i in [2, 4, 6, 8, 10]:
                 if len(linha) > i: total_prot += extrair_numero_planilha(linha[i])
             
-            # Formata a data para aparecer apenas "Dia/Mês" no gráfico e economizar espaço
+            # O FILTRO DE OURO: Se o dia estiver vazio (0 kcal), ele ignora e passa pro próximo!
+            if total_kcal == 0 and total_prot == 0:
+                continue
+                
             data_curta = data_str[:5] 
             historico.insert(0, {"Data": data_curta, "Calorias (kcal)": total_kcal, "Proteínas (g)": total_prot})
             
@@ -143,7 +141,6 @@ if not st.session_state.resumo_atualizado:
         st.session_state.historico = buscar_historico(7)
         st.session_state.resumo_atualizado = True
 
-# Abas para separar o Resumo de Hoje do Histórico
 aba_hoje, aba_graficos = st.tabs(["📊 Progresso de Hoje", "📈 Histórico Semanal"])
 
 with aba_hoje:
@@ -164,12 +161,12 @@ with aba_graficos:
         df.set_index("Data", inplace=True)
         
         st.markdown("**Calorias nos últimos 7 dias**")
-        st.bar_chart(df["Calorias (kcal)"], color="#ff5a5f") # Gráfico vermelho/laranja
+        st.bar_chart(df["Calorias (kcal)"], color="#ff5a5f") 
         
         st.markdown("**Proteínas nos últimos 7 dias**")
-        st.bar_chart(df["Proteínas (g)"], color="#1f77b4") # Gráfico azul
+        st.bar_chart(df["Proteínas (g)"], color="#1f77b4") 
     else:
-        st.write("Ainda não há dados suficientes para o histórico.")
+        st.info("Ainda não há refeições suficientes registradas para gerar o gráfico.")
 
 st.divider()
 
@@ -197,7 +194,6 @@ if foto is not None and foto != st.session_state.ultima_foto:
     st.session_state.erro_ia = ""
 
 if foto is not None:
-    # ETAPA 1: Visão
     if st.session_state.etapa == 1:
         with st.spinner("A IA está olhando seu prato... 👀"):
             try:
@@ -213,7 +209,6 @@ if foto is not None:
                 st.session_state.etapa = 2
                 st.rerun()
 
-    # ETAPA 2: Revisão
     if st.session_state.etapa >= 2:
         if st.session_state.erro_ia:
             st.warning(f"🔍 Aviso técnico da Visão: {st.session_state.erro_ia}")
@@ -240,25 +235,18 @@ if foto is not None:
                 except Exception as e:
                     st.error(f"🚨 Erro técnico ao calcular: {e}")
 
-    # ETAPA 3: Salvar no Google Sheets
     if st.session_state.etapa == 3:
         st.divider() 
         st.success("Cálculo concluído!")
         
         data = st.date_input("Data da refeição", datetime.datetime.now(FUSO_BR).date())
         
-        # --- A MÁGICA DA REFEIÇÃO AUTOMÁTICA ESTÁ AQUI ---
         hora_atual = datetime.datetime.now(FUSO_BR).hour
-        if hora_atual < 11:
-            refeicao_sugerida = 0 # Café da manhã (00h às 10h59)
-        elif hora_atual < 13:
-            refeicao_sugerida = 1 # Lanche da manhã (11h às 12h59)
-        elif hora_atual < 16:
-            refeicao_sugerida = 2 # Almoço (13h às 15h59)
-        elif hora_atual < 19:
-            refeicao_sugerida = 3 # Lanche da tarde (16h às 18h59)
-        else:
-            refeicao_sugerida = 4 # Jantar (19h em diante)
+        if hora_atual < 11: refeicao_sugerida = 0 
+        elif hora_atual < 13: refeicao_sugerida = 1 
+        elif hora_atual < 16: refeicao_sugerida = 2 
+        elif hora_atual < 19: refeicao_sugerida = 3 
+        else: refeicao_sugerida = 4 
             
         refeicao = st.selectbox("Refeição", ["Café da manhã", "Lanche da manhã", "Almoço", "Lanche da tarde", "Jantar"], index=refeicao_sugerida)
         
@@ -294,8 +282,7 @@ if foto is not None:
                         planilha.update_cell(linha_alvo, col_kcal, f"{calorias}".replace(".", ","))
                         planilha.update_cell(linha_alvo, col_prot, f"{proteinas}".replace(".", ","))
 
-                        st.session_state.total_kcal += calorias
-                        st.session_state.total_prot += proteinas
+                        # Força o aplicativo a buscar tudo de novo atualizado
                         st.session_state.resumo_atualizado = False 
 
                         st.success(f"🎉 SUCESSO! Valores salvos no {refeicao} do dia {data_formatada}!")
