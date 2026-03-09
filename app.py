@@ -119,7 +119,6 @@ def buscar_historico(dias=7):
             for i in [2, 4, 6, 8, 10]:
                 if len(linha) > i: total_prot += extrair_numero_planilha(linha[i])
             
-            # O FILTRO DE OURO: Se o dia estiver vazio (0 kcal), ele ignora e passa pro próximo!
             if total_kcal == 0 and total_prot == 0:
                 continue
                 
@@ -266,26 +265,43 @@ if foto is not None:
                         }
                         col_kcal, col_prot = mapa_colunas[refeicao]
 
-                        datas_na_planilha = planilha.col_values(1)
-                        linha_alvo = None
+                        # Pega todos os registros para descobrirmos a linha certa e o que já tem lá
+                        registros = planilha.get_all_values()
+                        datas_na_planilha = [linha[0] if len(linha) > 0 else "" for linha in registros]
                         
+                        linha_alvo = None
                         for i, valor_data in enumerate(datas_na_planilha):
                             if data_formatada in str(valor_data): 
                                 linha_alvo = i + 1 
                                 break
                         
+                        valor_atual_kcal = 0.0
+                        valor_atual_prot = 0.0
+                        
+                        # Se o dia não existe, cria nova linha
                         if linha_alvo is None:
                             nova_linha = [data_formatada] + [""] * 13 
                             planilha.append_row(nova_linha)
                             linha_alvo = len(planilha.col_values(1))
+                        else:
+                            # Se o dia existe, o robô LÊ o que já tem lá na coluna antes de escrever!
+                            linha_dados = registros[linha_alvo - 1]
+                            if len(linha_dados) >= col_kcal:
+                                valor_atual_kcal = extrair_numero_planilha(linha_dados[col_kcal - 1])
+                            if len(linha_dados) >= col_prot:
+                                valor_atual_prot = extrair_numero_planilha(linha_dados[col_prot - 1])
 
-                        planilha.update_cell(linha_alvo, col_kcal, f"{calorias}".replace(".", ","))
-                        planilha.update_cell(linha_alvo, col_prot, f"{proteinas}".replace(".", ","))
+                        # A MÁGICA: Soma as calorias da refeição atual com o que já estava na planilha
+                        novo_kcal = valor_atual_kcal + calorias
+                        novo_prot = valor_atual_prot + proteinas
 
-                        # Força o aplicativo a buscar tudo de novo atualizado
+                        # Escreve o valor SOMADO
+                        planilha.update_cell(linha_alvo, col_kcal, f"{novo_kcal:.2f}".replace(".", ","))
+                        planilha.update_cell(linha_alvo, col_prot, f"{novo_prot:.2f}".replace(".", ","))
+
                         st.session_state.resumo_atualizado = False 
 
-                        st.success(f"🎉 SUCESSO! Valores salvos no {refeicao} do dia {data_formatada}!")
+                        st.success(f"🎉 SUCESSO! Refeição adicionada ao {refeicao} do dia {data_formatada}!")
                         st.balloons() 
                     except Exception as e:
                         st.error(f"Erro ao salvar na planilha: {type(e).__name__} - {str(e)}")
