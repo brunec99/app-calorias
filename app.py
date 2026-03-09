@@ -5,6 +5,7 @@ from PIL import Image
 import re 
 import gspread
 import json
+import pandas as pd
 from google.oauth2.service_account import Credentials
 
 # --- CONFIGURAÇÕES IMPORTANTES ---
@@ -43,6 +44,7 @@ if "resumo_atualizado" not in st.session_state:
     st.session_state.resumo_atualizado = False
     st.session_state.total_kcal = 0.0
     st.session_state.total_prot = 0.0
+    st.session_state.historico = []
 
 def extrair_numeros(texto):
     return re.findall(r'\d+\.?\d*', texto.replace(',', '.'))
@@ -81,7 +83,6 @@ def buscar_resumo_hoje():
     if not planilha: return 0.0, 0.0
     
     try:
-        # AGORA USANDO O HORÁRIO DO BRASIL
         data_hoje = datetime.datetime.now(FUSO_BR).strftime("%d/%m/%Y")
         registros = planilha.get_all_values()
         
@@ -102,25 +103,79 @@ def buscar_resumo_hoje():
     except Exception as e:
         return 0.0, 0.0
 
+# --- FUNÇÃO PARA PEGAR O HISTÓRICO (ÚLTIMOS 7 DIAS) ---
+def buscar_historico(dias=7):
+    planilha = conectar_planilha()
+    if not planilha: return []
+    
+    try:
+        registros = planilha.get_all_values()[2:] 
+        historico = []
+        
+        # Pega as linhas de baixo para cima (mais recentes primeiro)
+        for linha in reversed(registros):
+            if not linha or not str(linha[0]).strip(): continue
+            data_str = str(linha[0]).strip()
+            
+            total_kcal = 0.0
+            total_prot = 0.0
+            for i in [1, 3, 5, 7, 9]:
+                if len(linha) > i: total_kcal += extrair_numero_planilha(linha[i])
+            for i in [2, 4, 6, 8, 10]:
+                if len(linha) > i: total_prot += extrair_numero_planilha(linha[i])
+            
+            # Formata a data para aparecer apenas "Dia/Mês" no gráfico e economizar espaço
+            data_curta = data_str[:5] 
+            historico.insert(0, {"Data": data_curta, "Calorias (kcal)": total_kcal, "Proteínas (g)": total_prot})
+            
+            if len(historico) >= dias:
+                break
+        return historico
+    except Exception as e:
+        return []
+
+# ==========================================
+# --- PAINEL DE DADOS ---
+# ==========================================
 if not st.session_state.resumo_atualizado:
-    with st.spinner("Buscando o quanto você já comeu hoje... 🔄"):
+    with st.spinner("Buscando seus dados na planilha... 🔄"):
         st.session_state.total_kcal, st.session_state.total_prot = buscar_resumo_hoje()
+        st.session_state.historico = buscar_historico(7)
         st.session_state.resumo_atualizado = True
 
-st.subheader("📊 Seu Progresso Hoje")
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("🔥 Calorias", f"{st.session_state.total_kcal:.0f} / {META_KCAL:.0f} kcal")
-    progresso_kcal = min(st.session_state.total_kcal / META_KCAL, 1.0)
-    st.progress(progresso_kcal)
-    
-with col2:
-    st.metric("💪 Proteínas", f"{st.session_state.total_prot:.0f} / {META_PROT:.0f} g")
-    progresso_prot = min(st.session_state.total_prot / META_PROT, 1.0)
-    st.progress(progresso_prot)
+# Abas para separar o Resumo de Hoje do Histórico
+aba_hoje, aba_graficos = st.tabs(["📊 Progresso de Hoje", "📈 Histórico Semanal"])
+
+with aba_hoje:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("🔥 Calorias", f"{st.session_state.total_kcal:.0f} / {META_KCAL:.0f} kcal")
+        progresso_kcal = min(st.session_state.total_kcal / META_KCAL, 1.0)
+        st.progress(progresso_kcal)
+        
+    with col2:
+        st.metric("💪 Proteínas", f"{st.session_state.total_prot:.0f} / {META_PROT:.0f} g")
+        progresso_prot = min(st.session_state.total_prot / META_PROT, 1.0)
+        st.progress(progresso_prot)
+
+with aba_graficos:
+    if st.session_state.historico:
+        df = pd.DataFrame(st.session_state.historico)
+        df.set_index("Data", inplace=True)
+        
+        st.markdown("**Calorias nos últimos 7 dias**")
+        st.bar_chart(df["Calorias (kcal)"], color="#ff5a5f") # Gráfico vermelho/laranja
+        
+        st.markdown("**Proteínas nos últimos 7 dias**")
+        st.bar_chart(df["Proteínas (g)"], color="#1f77b4") # Gráfico azul
+    else:
+        st.write("Ainda não há dados suficientes para o histórico.")
 
 st.divider()
 
+# ==========================================
+# --- CÂMERA E IA ---
+# ==========================================
 st.write("Envie uma foto do seu prato. Eu vou analisar e salvar direto na sua planilha!")
 
 aba_camera, aba_galeria = st.tabs(["📸 Tirar Foto", "📁 Enviar da Galeria"])
@@ -190,10 +245,22 @@ if foto is not None:
         st.divider() 
         st.success("Cálculo concluído!")
         
-        # AGORA USANDO O HORÁRIO DO BRASIL NA CAIXINHA TAMBÉM
         data = st.date_input("Data da refeição", datetime.datetime.now(FUSO_BR).date())
         
-        refeicao = st.selectbox("Refeição", ["Café da manhã", "Lanche da manhã", "Almoço", "Lanche da tarde", "Jantar"])
+        # --- A MÁGICA DA REFEIÇÃO AUTOMÁTICA ESTÁ AQUI ---
+        hora_atual = datetime.datetime.now(FUSO_BR).hour
+        if hora_atual < 11:
+            refeicao_sugerida = 0 # Café da manhã (00h às 10h59)
+        elif hora_atual < 13:
+            refeicao_sugerida = 1 # Lanche da manhã (11h às 12h59)
+        elif hora_atual < 16:
+            refeicao_sugerida = 2 # Almoço (13h às 15h59)
+        elif hora_atual < 19:
+            refeicao_sugerida = 3 # Lanche da tarde (16h às 18h59)
+        else:
+            refeicao_sugerida = 4 # Jantar (19h em diante)
+            
+        refeicao = st.selectbox("Refeição", ["Café da manhã", "Lanche da manhã", "Almoço", "Lanche da tarde", "Jantar"], index=refeicao_sugerida)
         
         calorias = st.number_input("Calorias (kcal)", min_value=0.0, format="%.2f", value=st.session_state.calorias_ia)
         proteinas = st.number_input("Proteínas (g)", min_value=0.0, format="%.2f", value=st.session_state.proteinas_ia)
